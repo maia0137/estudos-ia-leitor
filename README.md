@@ -26,7 +26,7 @@ Roda em **um único arquivo HTML**, sem build, sem servidor, sem conta. Todos os
 ## 🚀 Como usar
 
 ### Opção 1 — Direto no navegador
-1. Baixe o arquivo `APP_ESTUDOS-MN.html`
+1. Baixe o arquivo `index.html`
 2. Abra com duplo clique (Chrome, Firefox, Edge, Safari)
 3. Pronto. Nenhuma instalação necessária.
 
