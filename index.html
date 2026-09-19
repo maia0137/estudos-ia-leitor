@@ -2,8 +2,9 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Estudos IA — Leitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%98%3C/text%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -98,7 +99,7 @@ body[data-fonte="codigo"] { font-family: var(--font-codigo); }
 body[data-fonte="tdah"] { font-family: var(--font-tdah); }
 body[data-fonte="dislexia"] { font-family: var(--font-dislexia); }
 
-#app{ height:100vh; display:flex; flex-direction:column; }
+#app{ height:100vh; height:100dvh; display:flex; flex-direction:column; }
 
 button{ font-family:inherit; }
 .icon-btn{
@@ -144,11 +145,15 @@ button{ font-family:inherit; }
   border:1px solid var(--border); border-radius:var(--radius);
   padding:14px 12px; margin-bottom:10px; cursor:pointer;
 }
+.item-row.linha-subpasta{
+  margin-left:-6px; border-left:4px solid var(--accent);
+  border-top-left-radius:4px; border-bottom-left-radius:4px;
+}
 .dot{
   width:22px; height:22px; border-radius:50%; flex-shrink:0;
   border:2px solid rgba(0,0,0,.08);
   display:flex; align-items:center; justify-content:center;
-  color:#fff; font-size:.7rem; font-weight:700;
+  color:#fff; font-size:.7rem; font-weight:700; line-height:1;
   text-shadow:0 1px 2px rgba(0,0,0,.45);
 }
 .folder-ico{ font-size:1.3rem; flex-shrink:0; width:22px; text-align:center; }
@@ -363,8 +368,8 @@ textarea#editorTexto:focus{ border-color:var(--accent); }
 .theme-swatch[data-t="escuro"]{ background:#000; color:#4caf50; }
 .theme-swatch[data-t="noite"]{ background:#0d1420; color:#5b8def; }
 .theme-swatch[data-t="contraste"]{ background:#000; color:#ffd600; }
-.theme-swatch[data-t="pastel"]{ background:#f6eef7; color:#a165c9; }
 .theme-swatch[data-t="conforto"]{ background:#1c1712; color:#c98a4b; }
+.theme-swatch[data-t="pastel"]{ background:#f6eef7; color:#a165c9; }
 
 /* ===== CALCULADORA ===== */
 .calc-display{
@@ -401,6 +406,18 @@ textarea#editorTexto:focus{ border-color:var(--accent); }
 .ajuda-corpo ul{ padding-left:1.3em; margin:4px 0; }
 .ajuda-corpo li{ margin-bottom:4px; }
 
+/* ===== MOVER PARA... ===== */
+.mover-caminho{ font-size:.78rem; color:var(--muted); margin-bottom:10px; min-height:1.1em; }
+.mover-lista{ max-height:50vh; overflow-y:auto; margin-bottom:6px; }
+.mover-item{
+  display:flex; align-items:center; gap:10px; padding:12px 10px; border-radius:10px;
+  cursor:pointer; border:1px solid var(--border); margin-bottom:8px;
+}
+.mover-item:active{ background: rgba(128,128,128,.1); }
+.mover-item.desabilitado{ opacity:.4; pointer-events:none; }
+.mover-item .folder-ico{ font-size:1.1rem; }
+.mover-vazio{ text-align:center; color:var(--muted); padding:20px; font-size:.85rem; }
+
 .reader-wrap{ touch-action: pan-y; }
 </style>
 </head>
@@ -426,7 +443,7 @@ textarea#editorTexto:focus{ border-color:var(--accent); }
 
 <div class="modal-backdrop" id="settingsBackdrop">
   <div class="modal-box">
-    <p class="modal-title">三 Ajustes de leitura</p>
+    <p class="modal-title">🎨 Ajustes de leitura</p>
     <div class="settings-group">
       <div class="settings-label">Tema</div>
       <div class="theme-grid" id="themeGrid"></div>
@@ -474,10 +491,22 @@ textarea#editorTexto:focus{ border-color:var(--accent); }
 
 <div class="modal-backdrop" id="ajudaBackdrop">
   <div class="modal-box" style="max-width:560px">
-    <p class="modal-title">ⓘ Como usar o app</p>
+    <p class="modal-title">❓ Como usar o app</p>
     <div id="ajudaConteudo" class="ajuda-corpo"></div>
     <div class="modal-actions">
       <button class="btn-confirm" style="flex:1" onclick="fecharAjuda()">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="moverBackdrop">
+  <div class="modal-box">
+    <p class="modal-title" id="moverTitulo">📦 Mover para...</p>
+    <div class="mover-caminho" id="moverCaminhoTexto"></div>
+    <div id="moverLista" class="mover-lista"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="fecharMover()">Cancelar</button>
+      <button class="btn-confirm" id="moverBtnConfirmar" onclick="confirmarMover()">Mover para cá</button>
     </div>
   </div>
 </div>
@@ -498,8 +527,8 @@ const TEMAS = [
   {id:'escuro', nome:'🌑 Escuro puro'},
   {id:'noite', nome:'🌌 Noite azulada'},
   {id:'contraste', nome:'⚡ Alto contraste'},
-  {id:'pastel', nome:'🌸 Pastel suave'},
-{id:'conforto', nome:'🕯️ Conforto Ocular'},
+  {id:'conforto', nome:'🕯️ Conforto Ocular'},
+  {id:'pastel', nome:'🌸 Pastel suave'}
 ];
 const FONTES = [
   {id:'tdah', nome:'Foco TDAH'},
@@ -528,12 +557,16 @@ function migrarTopico(t){
   if(!t.historico) t.historico = [];
   return t;
 }
+/* migra recursivamente uma "pasta" (disciplina OU subpasta) e tudo dentro dela */
+function migrarPasta(p){
+  if(!p.topicos) p.topicos = [];
+  if(!p.subpastas) p.subpastas = [];
+  p.topicos.forEach(migrarTopico);
+  p.subpastas.forEach(migrarPasta);
+  return p;
+}
 function migrarDisciplina(d){
-  if(!d.subpastas) d.subpastas = [];
-  if(!d.topicos) d.topicos = [];
-  d.topicos.forEach(migrarTopico);
-  d.subpastas.forEach(sp=>{ if(!sp.topicos) sp.topicos=[]; sp.topicos.forEach(migrarTopico); });
-  return d;
+  return migrarPasta(d);
 }
 
 function purgarLixeiraAntiga(estado){
@@ -577,7 +610,7 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
    ESTADO DE SESSÃO/UI (posição, telas, scroll) — persistido em SESSAO_KEY
    ============================================================ */
 function sessaoPadrao(){
-  return { view:'home', discId:null, subpastaId:null, topicoId:null, modo:'ler', scroll:{} };
+  return { view:'home', discId:null, caminho:[], topicoId:null, modo:'ler', scroll:{} };
 }
 function carregarSessao(){
   try{
@@ -585,6 +618,7 @@ function carregarSessao(){
     if(!raw) return sessaoPadrao();
     const parsed = JSON.parse(raw);
     if(!parsed.scroll) parsed.scroll = {};
+    if(!parsed.caminho) parsed.caminho = [];
     return parsed;
   }catch(e){ return sessaoPadrao(); }
 }
@@ -604,7 +638,7 @@ function salvarSessao(imediato){
    ============================================================ */
 let view = sessao.view;
 let currentDiscId = sessao.discId;
-let currentSubpastaId = sessao.subpastaId;
+let currentCaminho = Array.isArray(sessao.caminho) ? [...sessao.caminho] : []; // ids de subpastas, da raiz até a atual
 let currentTopicoId = sessao.topicoId;
 let topicoModo = sessao.modo || 'ler';
 let searchQuery = '';
@@ -614,32 +648,74 @@ let chromeHidden = false;
 function sincronizarSessao(){
   sessao.view = view;
   sessao.discId = currentDiscId;
-  sessao.subpastaId = currentSubpastaId;
+  sessao.caminho = [...currentCaminho];
   sessao.topicoId = currentTopicoId;
   sessao.modo = topicoModo;
   salvarSessao(false);
 }
 
-/* validação: garante que os ids da sessão restaurada ainda existem */
+/* ============================================================
+   INTEGRAÇÃO COM O HISTÓRICO DO NAVEGADOR (botão físico/gesto de voltar)
+   ============================================================ */
+function estadoNavegacaoAtual(){
+  return { view, discId: currentDiscId, caminho: [...currentCaminho], topicoId: currentTopicoId, modo: topicoModo };
+}
+function empilharHistorico(){
+  history.pushState(estadoNavegacaoAtual(), '', '');
+}
+function reconstruirHistoricoInicial(){
+  history.replaceState({ view:'home', discId:null, caminho:[], topicoId:null, modo:'ler' }, '', '');
+  if(view === 'home') return;
+  if(view === 'lixeira'){
+    history.pushState({ view:'lixeira', discId:null, caminho:[], topicoId:null, modo:'ler' }, '', '');
+    return;
+  }
+  if(!currentDiscId) return;
+  history.pushState({ view:'pasta', discId: currentDiscId, caminho: [], topicoId:null, modo:'ler' }, '', '');
+  for(let i=1; i<=currentCaminho.length; i++){
+    history.pushState({ view:'pasta', discId: currentDiscId, caminho: currentCaminho.slice(0,i), topicoId:null, modo:'ler' }, '', '');
+  }
+  if(view === 'topico'){
+    history.pushState({ view:'topico', discId: currentDiscId, caminho: [...currentCaminho], topicoId: currentTopicoId, modo: topicoModo }, '', '');
+  }
+}
+window.addEventListener('popstate', (e)=>{
+  const s = e.state;
+  if(s){
+    view = s.view || 'home';
+    currentDiscId = s.discId || null;
+    currentCaminho = Array.isArray(s.caminho) ? [...s.caminho] : [];
+    currentTopicoId = s.topicoId || null;
+    topicoModo = s.modo || 'ler';
+  } else {
+    view = 'home'; currentDiscId=null; currentCaminho=[]; currentTopicoId=null; topicoModo='ler';
+  }
+  chromeHidden = false;
+  fecharDropdowns();
+  render();
+});
+
+/* validação: garante que os ids da sessão restaurada ainda existem, cortando o caminho no primeiro nível que sumiu */
 function validarSessaoInicial(){
   if(view === 'home') return;
   const disc = getDisciplina(currentDiscId);
-  if(!disc){ view='home'; currentDiscId=null; currentSubpastaId=null; currentTopicoId=null; return; }
-  if(view === 'disciplina') return;
+  if(!disc){ view='home'; currentDiscId=null; currentCaminho=[]; currentTopicoId=null; return; }
 
-  let subp = null;
-  if(currentSubpastaId){
-    subp = getSubpasta(disc, currentSubpastaId);
-    if(!subp){ view='disciplina'; currentSubpastaId=null; currentTopicoId=null; return; }
+  let pasta = disc;
+  const caminhoValido = [];
+  for(const spId of currentCaminho){
+    const proxima = pasta.subpastas.find(s=>s.id===spId);
+    if(!proxima) break;
+    caminhoValido.push(spId);
+    pasta = proxima;
   }
-  if(view === 'subpasta'){
-    if(!subp){ view='disciplina'; }
-    return;
-  }
+  currentCaminho = caminhoValido;
+
+  if(view === 'pasta') return;
+
   if(view === 'topico'){
-    const container = subp ? subp.topicos : disc.topicos;
-    const top = container.find(t=>t.id===currentTopicoId);
-    if(!top){ view = subp ? 'subpasta' : 'disciplina'; currentTopicoId=null; return; }
+    const top = pasta.topicos.find(t=>t.id===currentTopicoId);
+    if(!top){ view='pasta'; currentTopicoId=null; return; }
     swipeStartTopicId = currentTopicoId;
   }
 }
@@ -653,17 +729,57 @@ function aplicarConfigVisual(){
 }
 
 function getDisciplina(id){ return state.disciplinas.find(d=>d.id===id); }
-function getSubpasta(disc, id){ return disc ? disc.subpastas.find(s=>s.id===id) : null; }
-function getContainerAtual(){
+
+/* Anda pela árvore a partir da disciplina, seguindo um array de ids de subpasta.
+   Retorna a "pasta" final (disciplina ou subpasta), que sempre tem .topicos e .subpastas. */
+function getPastaPorCaminho(disc, caminho){
+  let pasta = disc;
+  for(const spId of caminho){
+    if(!pasta) return null;
+    pasta = pasta.subpastas.find(s=>s.id===spId);
+  }
+  return pasta || null;
+}
+/* pasta em que o usuário está agora (disciplina raiz ou subpasta aninhada) */
+function getPastaAtual(){
   const disc = getDisciplina(currentDiscId);
   if(!disc) return null;
-  if(currentSubpastaId){
-    const sp = getSubpasta(disc, currentSubpastaId);
-    return sp ? sp.topicos : null;
-  }
-  return disc.topicos;
+  return getPastaPorCaminho(disc, currentCaminho);
+}
+/* pasta-mãe da pasta atual (undefined/null se estamos na raiz da disciplina) */
+function getPastaPaiAtual(){
+  const disc = getDisciplina(currentDiscId);
+  if(!disc || currentCaminho.length === 0) return null;
+  return getPastaPorCaminho(disc, currentCaminho.slice(0, -1));
+}
+function getContainerAtual(){
+  const pasta = getPastaAtual();
+  return pasta ? pasta.topicos : null;
 }
 function getTopico(container, id){ return container ? container.find(t=>t.id===id) : null; }
+
+function caminhoTexto(){
+  const disc = getDisciplina(currentDiscId);
+  if(!disc) return '';
+  const nomes = [disc.nome];
+  let pasta = disc;
+  for(const spId of currentCaminho){
+    pasta = pasta.subpastas.find(s=>s.id===spId);
+    if(!pasta) break;
+    nomes.push(pasta.nome);
+  }
+  return nomes.join(' › ');
+}
+function contarTopicosRecursivo(pasta){
+  let total = pasta.topicos.length;
+  pasta.subpastas.forEach(sp => total += contarTopicosRecursivo(sp));
+  return total;
+}
+function contarSubpastasRecursivo(pasta){
+  let total = pasta.subpastas.length;
+  pasta.subpastas.forEach(sp => total += contarSubpastasRecursivo(sp));
+  return total;
+}
 
 /* ============================================================
    RENDER PRINCIPAL
@@ -672,8 +788,7 @@ function render(){
   aplicarConfigVisual();
   const app = document.getElementById('app');
   if(view === 'home') app.innerHTML = renderHome();
-  else if(view === 'disciplina') app.innerHTML = renderDisciplina();
-  else if(view === 'subpasta') app.innerHTML = renderSubpasta();
+  else if(view === 'pasta') app.innerHTML = renderPasta();
   else if(view === 'lixeira') app.innerHTML = renderLixeira();
   else if(view === 'topico') app.innerHTML = renderTopico();
 
@@ -710,11 +825,11 @@ function renderHome(){
       listaHtml = `<div class="empty-state">Nenhum tópico encontrado para "${escapeHtml(searchQuery)}".</div>`;
     } else {
       listaHtml = resultadosBusca.map(r => `
-        <div class="item-row" onclick="abrirTopicoDireto('${r.discId}', ${r.subpastaId?`'${r.subpastaId}'`:'null'}, '${r.topico.id}')">
+        <div class="item-row" onclick="abrirTopicoDireto('${r.discId}', [${r.caminho.map(id=>`'${id}'`).join(',')}], '${r.topico.id}')">
           <div class="dot" style="background:${r.cor}"></div>
           <div class="item-main">
             <div class="item-title">${escapeHtml(r.topico.nome)}</div>
-            <div class="item-sub">${escapeHtml(r.caminho)}</div>
+            <div class="item-sub">${escapeHtml(r.caminhoTexto)}</div>
           </div>
           <div class="chevron">›</div>
         </div>
@@ -724,13 +839,14 @@ function renderHome(){
     listaHtml = `<div class="empty-state">Nenhuma disciplina ainda.<br>Toque em "+ Nova Disciplina" para começar.</div>`;
   } else {
     listaHtml = state.disciplinas.map((d, idx) => {
-      const totalTopicos = d.topicos.length + d.subpastas.reduce((s,sp)=>s+sp.topicos.length,0);
+      const totalTopicos = contarTopicosRecursivo(d);
+      const totalSubpastas = contarSubpastasRecursivo(d);
       return `
       <div class="item-row">
         <div class="dot" style="background:${d.cor}" onclick="event.stopPropagation(); ciclarCorDisciplina('${d.id}')">${idx+1}</div>
         <div class="item-main" onclick="abrirDisciplina('${d.id}')">
           <div class="item-title">${escapeHtml(d.nome)}</div>
-          <div class="item-sub">${totalTopicos} tópico${totalTopicos===1?'':'s'}${d.subpastas.length?` · ${d.subpastas.length} subpasta${d.subpastas.length===1?'':'s'}`:''}</div>
+          <div class="item-sub">${totalTopicos} tópico${totalTopicos===1?'':'s'}${totalSubpastas?` · ${totalSubpastas} subpasta${totalSubpastas===1?'':'s'}`:''}</div>
         </div>
         <div class="chevron" onclick="abrirDisciplina('${d.id}')">›</div>
       </div>
@@ -739,10 +855,10 @@ function renderHome(){
 
   return `
     <div class="topbar">
-      <h1>⌯⌲ Estudos</h1>
-      <button class="icon-btn" onclick="abrirAjuda()" title="Como usar">ⓘ</button>
-      <button class="icon-btn" onclick="abrirLixeira()" title="Lixeira">🚮️</button>
-      <button class="icon-btn" onclick="abrirAjustes()" title="Ajustes">三</button>
+      <h1>📘 Estudos</h1>
+      <button class="icon-btn" onclick="abrirAjuda()" title="Como usar">❓</button>
+      <button class="icon-btn" onclick="abrirLixeira()" title="Lixeira">🗑️</button>
+      <button class="icon-btn" onclick="abrirAjustes()" title="Ajustes">🎨</button>
     </div>
     <div class="search-wrap">
       <div class="search-box">
@@ -763,19 +879,20 @@ function renderHome(){
   `;
 }
 
+/* Busca recursiva em toda a árvore (disciplina + subpastas aninhadas em qualquer profundidade) */
 function buscarTopicos(q){
   const out = [];
-  state.disciplinas.forEach(d=>{
-    d.topicos.forEach(t=>{
+  function caminharPasta(pasta, discId, cor, caminhoIds, nomes){
+    pasta.topicos.forEach(t=>{
       const alvo = (t.nome + ' ' + (t.conteudo||'')).toLowerCase();
-      if(alvo.includes(q)) out.push({discId:d.id, subpastaId:null, caminho:d.nome, cor:d.cor, topico:t});
+      if(alvo.includes(q)) out.push({discId, caminho:[...caminhoIds], caminhoTexto: nomes.join(' › '), cor, topico:t});
     });
-    d.subpastas.forEach(sp=>{
-      sp.topicos.forEach(t=>{
-        const alvo = (t.nome + ' ' + (t.conteudo||'')).toLowerCase();
-        if(alvo.includes(q)) out.push({discId:d.id, subpastaId:sp.id, caminho:`${d.nome} › ${sp.nome}`, cor:d.cor, topico:t});
-      });
+    pasta.subpastas.forEach(sp=>{
+      caminharPasta(sp, discId, cor, [...caminhoIds, sp.id], [...nomes, sp.nome]);
     });
+  }
+  state.disciplinas.forEach(d=>{
+    caminharPasta(d, d.id, d.cor, [], [d.nome]);
   });
   return out;
 }
@@ -787,9 +904,9 @@ function onSearchInput(v){
   if(input){ input.focus(); input.selectionStart = input.selectionEnd = input.value.length; }
 }
 
-function abrirTopicoDireto(discId, subpastaId, topicoId){
+function abrirTopicoDireto(discId, caminho, topicoId){
   currentDiscId = discId;
-  currentSubpastaId = subpastaId;
+  currentCaminho = Array.isArray(caminho) ? [...caminho] : [];
   currentTopicoId = topicoId;
   const container = getContainerAtual();
   const top = getTopico(container, topicoId);
@@ -799,6 +916,7 @@ function abrirTopicoDireto(discId, subpastaId, topicoId){
   view = 'topico';
   chromeHidden = false;
   swipeStartTopicId = topicoId;
+  empilharHistorico();
   render();
 }
 
@@ -822,33 +940,38 @@ function criarDisciplina(){
 
 function abrirDisciplina(id){
   currentDiscId = id;
-  currentSubpastaId = null;
-  view = 'disciplina';
+  currentCaminho = [];
+  view = 'pasta';
+  empilharHistorico();
   render();
 }
 
-/* ---------- DISCIPLINA ---------- */
-function renderDisciplina(){
+/* ---------- PASTA (disciplina na raiz OU subpasta aninhada em qualquer profundidade) ---------- */
+function renderPasta(){
   const disc = getDisciplina(currentDiscId);
   if(!disc){ view='home'; return renderHome(); }
+  const pasta = getPastaAtual();
+  if(!pasta){ currentCaminho = []; return renderPasta(); }
 
   let html = '';
-  if(disc.subpastas.length > 0){
+  if(pasta.subpastas.length > 0){
     html += `<div class="section-label">Subpastas</div>`;
-    html += disc.subpastas.map(sp => `
-      <div class="item-row" onclick="abrirSubpasta('${sp.id}')">
-        <div class="folder-ico">📁</div>
+    html += pasta.subpastas.map((sp, idx) => {
+      const totalSub = contarTopicosRecursivo(sp);
+      return `
+      <div class="item-row linha-subpasta" onclick="abrirSubpasta('${sp.id}')">
+        <div class="dot" style="background:${disc.cor}">${idx+1}</div>
         <div class="item-main">
           <div class="item-title">${escapeHtml(sp.nome)}</div>
-          <div class="item-sub">${sp.topicos.length} tópico${sp.topicos.length===1?'':'s'}</div>
+          <div class="item-sub">${totalSub} tópico${totalSub===1?'':'s'}${sp.subpastas.length?` · ${sp.subpastas.length} subpasta${sp.subpastas.length===1?'':'s'}`:''}</div>
         </div>
         <div class="chevron">›</div>
       </div>
-    `).join('');
+    `;}).join('');
   }
-  if(disc.topicos.length > 0){
-    if(disc.subpastas.length>0) html += `<div class="section-label">Tópicos soltos</div>`;
-    html += disc.topicos.map((t, idx) => `
+  if(pasta.topicos.length > 0){
+    if(pasta.subpastas.length>0) html += `<div class="section-label">Tópicos soltos</div>`;
+    html += pasta.topicos.map((t, idx) => `
       <div class="item-row" onclick="abrirTopico('${t.id}')">
         <div class="dot" style="background:${disc.cor}">${idx+1}</div>
         <div class="item-main">
@@ -859,15 +982,19 @@ function renderDisciplina(){
       </div>
     `).join('');
   }
-  if(disc.subpastas.length===0 && disc.topicos.length===0){
+  if(pasta.subpastas.length===0 && pasta.topicos.length===0){
     html = `<div class="empty-state">Nenhum tópico ainda.<br>Crie uma subpasta ou cole suas anotações direto aqui.</div>`;
   }
 
+  const naRaiz = currentCaminho.length === 0;
+  const titulo = naRaiz ? disc.nome : pasta.nome;
+  const subtitulo = naRaiz ? '' : caminhoTexto();
+
   return `
     <div class="topbar">
-      <button class="icon-btn" onclick="voltarHome()">←</button>
-      <h2>${escapeHtml(disc.nome)}</h2>
-      ${renderDropdownDisciplina()}
+      <button class="icon-btn" onclick="voltarUmNivel()">←</button>
+      <h2>${escapeHtml(titulo)}${subtitulo ? `<span class="sub">${escapeHtml(subtitulo)}</span>` : ''}</h2>
+      ${renderDropdownPasta(naRaiz)}
     </div>
     <div class="content">
       <div class="list" style="padding-top:14px">${html}</div>
@@ -879,51 +1006,74 @@ function renderDisciplina(){
   `;
 }
 
-function renderDropdownDisciplina(){
+function renderDropdownPasta(naRaiz){
+  const idPanel = naRaiz ? 'ddDisc' : 'ddSub';
+  const rotulo = naRaiz ? 'disciplina' : 'subpasta';
   return `
     <div class="dropdown">
-      <button class="icon-btn" onclick="toggleDropdown(event,'ddDisc')">⋮</button>
-      <div class="dropdown-panel" id="ddDisc">
-        <div class="dropdown-item" onclick="renomearDisciplina()">✏️ Renomear</div>
-        <div class="dropdown-item danger" onclick="excluirDisciplina()">🚮️ Excluir disciplina</div>
+      <button class="icon-btn" onclick="toggleDropdown(event,'${idPanel}')">⋮</button>
+      <div class="dropdown-panel" id="${idPanel}">
+        <div class="dropdown-item" onclick="renomearPastaAtual()">✏️ Renomear</div>
+        ${naRaiz ? '' : `<div class="dropdown-item" onclick="fecharDropdowns(); abrirMover('subpasta')">📦 Mover para...</div>`}
+        <div class="dropdown-item danger" onclick="excluirPastaAtual()">🗑️ Excluir ${rotulo}</div>
       </div>
     </div>
   `;
 }
 
-function renomearDisciplina(){
-  const disc = getDisciplina(currentDiscId);
+function renomearPastaAtual(){
   fecharDropdowns();
-  abrirModal('Renomear disciplina', '', disc.nome, (nome)=>{
+  const pasta = getPastaAtual();
+  abrirModal('Renomear', '', pasta.nome, (nome)=>{
     if(!nome) return;
-    disc.nome = nome; salvarState(true); render();
+    pasta.nome = nome; salvarState(true); render();
   });
 }
-function excluirDisciplina(){
+
+function excluirPastaAtual(){
   fecharDropdowns();
   const disc = getDisciplina(currentDiscId);
-  if(!confirm(`Excluir "${disc.nome}" e todo o seu conteúdo (subpastas e tópicos)?\n\nVai para a lixeira por ${DIAS_RETENCAO_LIXEIRA} dias.`)) return;
-  state.lixeira.push({ id: uid(), tipo:'disciplina', nome: disc.nome, dados: disc, excluidoEm: Date.now() });
-  state.disciplinas = state.disciplinas.filter(d=>d.id!==currentDiscId);
-  salvarState(true);
-  view='home'; currentDiscId=null; currentSubpastaId=null;
-  render();
-  mostrarToast('Disciplina movida para a lixeira');
+  const naRaiz = currentCaminho.length === 0;
+
+  if(naRaiz){
+    if(!confirm(`Excluir "${disc.nome}" e todo o seu conteúdo (subpastas e tópicos)?\n\nVai para a lixeira por ${DIAS_RETENCAO_LIXEIRA} dias.`)) return;
+    state.lixeira.push({ id: uid(), tipo:'disciplina', nome: disc.nome, dados: disc, excluidoEm: Date.now() });
+    state.disciplinas = state.disciplinas.filter(d=>d.id!==currentDiscId);
+    salvarState(true);
+    mostrarToast('Disciplina movida para a lixeira');
+    history.back();
+  } else {
+    const pasta = getPastaAtual();
+    const pastaPai = getPastaPaiAtual();
+    if(!confirm(`Excluir "${pasta.nome}" e todo o seu conteúdo (subpastas e tópicos)?\n\nVai para a lixeira por ${DIAS_RETENCAO_LIXEIRA} dias.`)) return;
+    state.lixeira.push({
+      id: uid(), tipo:'subpasta', nome: pasta.nome, dados: pasta,
+      discIdOriginal: disc.id, discNomeOriginal: disc.nome,
+      caminhoPaiOriginal: currentCaminho.slice(0, -1),
+      caminhoTextoOriginal: caminhoTexto(),
+      excluidoEm: Date.now()
+    });
+    pastaPai.subpastas = pastaPai.subpastas.filter(s=>s.id!==pasta.id);
+    salvarState(true);
+    mostrarToast('Subpasta movida para a lixeira');
+    history.back();
+  }
 }
 
 function criarSubpasta(){
   abrirModal('Nova subpasta', 'Ex: Unidade 2 - Provas', '', (nome)=>{
     if(!nome) return;
-    const disc = getDisciplina(currentDiscId);
-    disc.subpastas.push({ id: uid(), nome, topicos: [] });
+    const pasta = getPastaAtual();
+    pasta.subpastas.push({ id: uid(), nome, topicos: [], subpastas: [] });
     salvarState(true);
     render();
   });
 }
 
 function abrirSubpasta(id){
-  currentSubpastaId = id;
-  view = 'subpasta';
+  currentCaminho = [...currentCaminho, id];
+  view = 'pasta';
+  empilharHistorico();
   render();
 }
 
@@ -948,91 +1098,24 @@ function abrirTopico(id){
   view = 'topico';
   chromeHidden = false;
   swipeStartTopicId = id;
+  empilharHistorico();
   render();
 }
 
+/* Estas três funções de "voltar" apenas pedem ao navegador pra voltar uma posição no
+   histórico — quem realmente aplica a tela anterior é o listener de 'popstate' acima,
+   o mesmo mecanismo usado pelo botão físico/gesto de voltar do celular. */
 function voltarHome(){
-  view = 'home'; currentDiscId=null; currentSubpastaId=null;
-  render();
+  history.back();
 }
-
-/* ---------- SUBPASTA ---------- */
-function renderSubpasta(){
-  const disc = getDisciplina(currentDiscId);
-  if(!disc){ view='home'; return renderHome(); }
-  const sp = getSubpasta(disc, currentSubpastaId);
-  if(!sp){ view='disciplina'; return renderDisciplina(); }
-
-  const html = sp.topicos.length === 0
-    ? `<div class="empty-state">Nenhum tópico nesta subpasta ainda.</div>`
-    : sp.topicos.map((t, idx) => `
-        <div class="item-row" onclick="abrirTopico('${t.id}')">
-          <div class="dot" style="background:${disc.cor}">${idx+1}</div>
-          <div class="item-main">
-            <div class="item-title">${escapeHtml(t.nome)}</div>
-            <div class="item-sub">${t.conteudo && t.conteudo.trim() ? 'Pronto para leitura' : 'Vazio — toque para colar'}</div>
-          </div>
-          <div class="chevron">›</div>
-        </div>
-      `).join('');
-
-  return `
-    <div class="topbar">
-      <button class="icon-btn" onclick="voltarDisciplinaDeSubpasta()">←</button>
-      <h2>${escapeHtml(sp.nome)}<span class="sub">${escapeHtml(disc.nome)}</span></h2>
-      ${renderDropdownSubpasta()}
-    </div>
-    <div class="content">
-      <div class="list" style="padding-top:14px">${html}</div>
-    </div>
-    <div class="fab-row">
-      <button class="btn-add" onclick="criarTopico()">➕ Novo Tópico</button>
-    </div>
-  `;
-}
-
-function renderDropdownSubpasta(){
-  return `
-    <div class="dropdown">
-      <button class="icon-btn" onclick="toggleDropdown(event,'ddSub')">⋮</button>
-      <div class="dropdown-panel" id="ddSub">
-        <div class="dropdown-item" onclick="renomearSubpasta()">✏️ Renomear</div>
-        <div class="dropdown-item danger" onclick="excluirSubpasta()">🚮️ Excluir subpasta</div>
-      </div>
-    </div>
-  `;
-}
-
-function renomearSubpasta(){
-  const disc = getDisciplina(currentDiscId);
-  const sp = getSubpasta(disc, currentSubpastaId);
-  fecharDropdowns();
-  abrirModal('Renomear subpasta', '', sp.nome, (nome)=>{
-    if(!nome) return;
-    sp.nome = nome; salvarState(true); render();
-  });
-}
-function excluirSubpasta(){
-  fecharDropdowns();
-  const disc = getDisciplina(currentDiscId);
-  const sp = getSubpasta(disc, currentSubpastaId);
-  if(!confirm(`Excluir a subpasta "${sp.nome}" e todos os seus tópicos?\n\nVai para a lixeira por ${DIAS_RETENCAO_LIXEIRA} dias.`)) return;
-  state.lixeira.push({ id: uid(), tipo:'subpasta', nome: sp.nome, dados: sp, discIdOriginal: disc.id, discNomeOriginal: disc.nome, excluidoEm: Date.now() });
-  disc.subpastas = disc.subpastas.filter(s=>s.id!==currentSubpastaId);
-  salvarState(true);
-  view='disciplina'; currentSubpastaId=null;
-  render();
-  mostrarToast('Subpasta movida para a lixeira');
-}
-
-function voltarDisciplinaDeSubpasta(){
-  view = 'disciplina'; currentSubpastaId=null;
-  render();
+function voltarUmNivel(){
+  history.back();
 }
 
 /* ---------- LIXEIRA ---------- */
 function abrirLixeira(){
   view = 'lixeira';
+  empilharHistorico();
   render();
 }
 
@@ -1045,24 +1128,24 @@ function renderLixeira(){
     : itens.map(item => {
         const diasRestantes = Math.max(0, DIAS_RETENCAO_LIXEIRA - Math.floor((Date.now()-item.excluidoEm)/(24*60*60*1000)));
         let caminho = '';
-        if(item.tipo === 'subpasta') caminho = item.discNomeOriginal || '';
-        if(item.tipo === 'topico') caminho = [item.discNomeOriginal, item.subpastaNomeOriginal].filter(Boolean).join(' › ');
+        if(item.tipo === 'subpasta') caminho = item.caminhoTextoOriginal || item.discNomeOriginal || '';
+        if(item.tipo === 'topico') caminho = item.caminhoTextoOriginal || item.discNomeOriginal || '';
         return `
         <div class="item-row">
-          <div class="folder-ico">${ICONE_TIPO[item.tipo]||'🚮️'}</div>
+          <div class="folder-ico">${ICONE_TIPO[item.tipo]||'🗑️'}</div>
           <div class="item-main">
             <div class="item-title">${escapeHtml(item.nome)}</div>
             <div class="item-sub">${caminho ? escapeHtml(caminho)+' · ' : ''}expira em ${diasRestantes} dia${diasRestantes===1?'':'s'}</div>
           </div>
           <button class="icon-btn" onclick="restaurarDaLixeira('${item.id}')" title="Restaurar">♻️</button>
-          <button class="icon-btn" onclick="excluirDefinitivoDaLixeira('${item.id}')" title="Excluir definitivamente">🚮️</button>
+          <button class="icon-btn" onclick="excluirDefinitivoDaLixeira('${item.id}')" title="Excluir definitivamente">🗑️</button>
         </div>
       `;}).join('');
 
   return `
     <div class="topbar">
       <button class="icon-btn" onclick="voltarHome()">←</button>
-      <h2>🚮️ Lixeira</h2>
+      <h2>🗑️ Lixeira</h2>
     </div>
     <div class="content">
       <div class="list" style="padding-top:14px">${lista}</div>
@@ -1083,12 +1166,14 @@ function restaurarDaLixeira(id){
   } else if(item.tipo === 'subpasta'){
     const disc = getDisciplina(item.discIdOriginal);
     if(!disc){ mostrarToast('Não foi possível restaurar: a disciplina original não existe mais.'); return; }
-    disc.subpastas.push(item.dados);
+    const pastaPai = getPastaPorCaminho(disc, item.caminhoPaiOriginal || []);
+    if(!pastaPai){ mostrarToast('Não foi possível restaurar: a pasta original não existe mais.'); return; }
+    pastaPai.subpastas.push(item.dados);
   } else if(item.tipo === 'topico'){
     const disc = getDisciplina(item.discIdOriginal);
     if(!disc){ mostrarToast('Não foi possível restaurar: a disciplina original não existe mais.'); return; }
-    const alvoContainer = item.subpastaIdOriginal ? getSubpasta(disc, item.subpastaIdOriginal) : disc;
-    if(!alvoContainer){ mostrarToast('Não foi possível restaurar: a subpasta original não existe mais.'); return; }
+    const alvoContainer = getPastaPorCaminho(disc, item.caminhoOriginal || []);
+    if(!alvoContainer){ mostrarToast('Não foi possível restaurar: a pasta original não existe mais.'); return; }
     alvoContainer.topicos.push(item.dados);
   }
 
@@ -1118,12 +1203,11 @@ function renderTopico(){
   const disc = getDisciplina(currentDiscId);
   if(!disc){ view='home'; return renderHome(); }
   const container = getContainerAtual();
-  if(!container){ view='disciplina'; currentSubpastaId=null; return renderDisciplina(); }
+  if(!container){ view='pasta'; currentCaminho=[]; return renderPasta(); }
   const top = getTopico(container, currentTopicoId);
-  if(!top){ view = currentSubpastaId ? 'subpasta' : 'disciplina'; return view==='subpasta' ? renderSubpasta() : renderDisciplina(); }
+  if(!top){ view = 'pasta'; return renderPasta(); }
 
-  const sp = currentSubpastaId ? getSubpasta(disc, currentSubpastaId) : null;
-  const caminho = sp ? `${disc.nome} › ${sp.nome}` : disc.nome;
+  const caminho = caminhoTexto();
 
   const modeTabsHtml = `
     <div class="mode-tabs">
@@ -1170,14 +1254,15 @@ function renderDropdownTopico(){
       <button class="icon-btn" onclick="toggleDropdown(event,'ddTop')">⋮</button>
       <div class="dropdown-panel" id="ddTop">
         <div class="dropdown-item" onclick="renomearTopico()">✏️ Renomear</div>
-        <div class="dropdown-item danger" onclick="excluirTopico()">🚮️ Excluir tópico</div>
+        <div class="dropdown-item" onclick="fecharDropdowns(); abrirMover('topico')">📦 Mover para...</div>
+        <div class="dropdown-item danger" onclick="excluirTopico()">🗑️ Excluir tópico</div>
         <div class="dropdown-divider"></div>
         <div class="dropdown-item" onclick="fecharDropdowns(); abrirHistorico()">🕘 Histórico de versões</div>
-        <div class="dropdown-item" onclick="fecharDropdowns(); abrirAjustes()">三 Tema e fonte</div>
+        <div class="dropdown-item" onclick="fecharDropdowns(); abrirAjustes()">🎨 Tema e fonte</div>
         <div class="dropdown-item" onclick="fecharDropdowns(); exportarTabelasExcel()">📊 Exportar tabelas (Excel)</div>
         <div class="dropdown-item" onclick="fecharDropdowns(); abrirCalculadora()">🧮 Calculadora</div>
         <div class="dropdown-divider"></div>
-        <div class="dropdown-item" onclick="fecharDropdowns(); abrirAjuda()">ⓘ Como usar</div>
+        <div class="dropdown-item" onclick="fecharDropdowns(); abrirAjuda()">❓ Como usar</div>
       </div>
     </div>
   `;
@@ -1360,30 +1445,25 @@ function renomearTopico(){
 function excluirTopico(){
   fecharDropdowns();
   const disc = getDisciplina(currentDiscId);
-  const sp = currentSubpastaId ? getSubpasta(disc, currentSubpastaId) : null;
   const container = getContainerAtual();
   const top = getTopico(container, currentTopicoId);
   if(!confirm(`Excluir o tópico "${top.nome}"?\n\nVai para a lixeira por ${DIAS_RETENCAO_LIXEIRA} dias.`)) return;
   state.lixeira.push({
     id: uid(), tipo:'topico', nome: top.nome, dados: top,
     discIdOriginal: disc.id, discNomeOriginal: disc.nome,
-    subpastaIdOriginal: currentSubpastaId, subpastaNomeOriginal: sp ? sp.nome : null,
+    caminhoOriginal: [...currentCaminho], caminhoTextoOriginal: caminhoTexto(),
     excluidoEm: Date.now()
   });
   const idx = container.findIndex(t=>t.id===currentTopicoId);
   container.splice(idx,1);
   delete sessao.scroll[currentTopicoId];
   salvarState(true); salvarSessao(true);
-  view = currentSubpastaId ? 'subpasta' : 'disciplina';
-  currentTopicoId = null;
-  render();
   mostrarToast('Tópico movido para a lixeira');
+  history.back();
 }
 
 function voltarDoTopico(){
-  view = currentSubpastaId ? 'subpasta' : 'disciplina';
-  currentTopicoId = null;
-  render();
+  history.back();
 }
 
 function alternarFoco(){
@@ -1459,9 +1539,13 @@ function mdTabela(){
 }
 
 /* ---------- SWIPE ENTRE TÓPICOS (modo leitura) ---------- */
-let touchStartX = null, touchStartY = null;
+let touchStartX = null, touchStartY = null, swipeBloqueadoPorRolagemHorizontal = false;
 document.addEventListener('touchstart', (e)=>{
   if(view!=='topico' || topicoModo!=='ler') return;
+  // se o toque começou dentro de uma tabela ou bloco de código que realmente rola na horizontal,
+  // deixa o gesto ser scroll nativo do conteúdo, não troca de tópico
+  const alvoRolavel = e.target.closest('table, pre');
+  swipeBloqueadoPorRolagemHorizontal = !!(alvoRolavel && alvoRolavel.scrollWidth > alvoRolavel.clientWidth);
   touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
 }, {passive:true});
 document.addEventListener('touchend', (e)=>{
@@ -1469,6 +1553,7 @@ document.addEventListener('touchend', (e)=>{
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = e.changedTouches[0].clientY - touchStartY;
   touchStartX = null;
+  if(swipeBloqueadoPorRolagemHorizontal){ swipeBloqueadoPorRolagemHorizontal = false; return; }
   if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4){
     navegarTopicoSwipe(dx < 0 ? 1 : -1);
   }
@@ -1910,7 +1995,8 @@ function abrirAjuda(){
     <p>Escreva <code>{{ }}</code> (ou <code>{{um texto de exemplo}}</code>) no editor. No modo Ler, isso vira um campo de texto que você preenche direto na tela — ótimo para anotar valores em campo ou laboratório.</p>
 
     <h3>📁 Organização</h3>
-    <p>Disciplinas podem ter Subpastas e também Tópicos soltos direto nela. Toque na bolinha colorida pra trocar a cor da disciplina.</p>
+    <p>Disciplinas podem ter Subpastas dentro de Subpastas, na profundidade que você quiser, e também Tópicos soltos direto nelas. Toque na bolinha colorida pra trocar a cor da disciplina.</p>
+    <p>No menu ⋮ de um tópico ou de uma subpasta, "📦 Mover para..." deixa você reorganizar tudo depois, movendo pra qualquer outra disciplina ou subpasta.</p>
 
     <h3>🔍 Busca</h3>
     <p>A busca na tela inicial procura em todos os tópicos de todas as disciplinas e subpastas de uma vez.</p>
@@ -1924,7 +2010,7 @@ function abrirAjuda(){
     <h3>🕘 Histórico de versões</h3>
     <p>Sempre que você edita um tópico e volta para o modo Ler, a versão anterior é guardada. No menu ⋮, "Histórico de versões" deixa você voltar a qualquer uma delas.</p>
 
-    <h3>🚮️ Lixeira</h3>
+    <h3>🗑️ Lixeira</h3>
     <p>Disciplinas, subpastas e tópicos excluídos ficam na lixeira (ícone na tela inicial) por ${DIAS_RETENCAO_LIXEIRA} dias antes de serem apagados de vez — dá pra restaurar a qualquer momento nesse período.</p>
 
     <h3>🧮 Calculadora</h3>
@@ -1933,7 +2019,7 @@ function abrirAjuda(){
     <h3>💾 Backup e Restaurar</h3>
     <p>No rodapé da tela inicial: "Backup" baixa um arquivo .json com tudo; "Restaurar" lê um arquivo .json e substitui os dados atuais. Guarde esse arquivo em algum lugar seguro (Drive, e-mail) de vez em quando.</p>
 
-    <h3>三 Temas e fontes</h3>
+    <h3>🎨 Temas e fontes</h3>
     <p>No botão de ajustes: 7 temas e 7 fontes, incluindo opções pensadas para foco (TDAH) e leitura facilitada (Dislexia). O tamanho do texto também é ajustável.</p>
 
     <h3>👆 Gestos</h3>
@@ -1943,6 +2029,148 @@ function abrirAjuda(){
 }
 function fecharAjuda(){
   document.getElementById('ajudaBackdrop').classList.remove('open');
+}
+
+/* ============================================================
+   MOVER PARA... (reorganizar tópicos e subpastas na árvore)
+   ============================================================ */
+let moverContexto = null;   // { tipo, discIdOrigem, caminhoOrigem, id, nome }
+let moverDiscIdAtual = null; // disciplina sendo navegada dentro do seletor
+let moverCaminhoAtual = [];  // caminho (dentro da disciplina acima) sendo navegado no seletor
+
+function nomesDoCaminho(disc, caminho){
+  const nomes = [];
+  let pasta = disc;
+  for(const id of caminho){
+    pasta = pasta.subpastas.find(s=>s.id===id);
+    if(!pasta) break;
+    nomes.push(pasta.nome);
+  }
+  return nomes;
+}
+
+function abrirMover(tipo){
+  fecharDropdowns();
+  if(tipo === 'topico'){
+    const container = getContainerAtual();
+    const top = getTopico(container, currentTopicoId);
+    if(!top) return;
+    moverContexto = { tipo:'topico', discIdOrigem: currentDiscId, caminhoOrigem: [...currentCaminho], id: currentTopicoId, nome: top.nome };
+  } else {
+    const pasta = getPastaAtual();
+    if(!pasta || currentCaminho.length === 0) return;
+    moverContexto = { tipo:'subpasta', discIdOrigem: currentDiscId, caminhoOrigem: currentCaminho.slice(0,-1), id: pasta.id, nome: pasta.nome };
+  }
+  moverDiscIdAtual = null;
+  moverCaminhoAtual = [];
+  document.getElementById('moverTitulo').innerText = `📦 Mover "${moverContexto.nome}" para...`;
+  renderMoverPicker();
+  document.getElementById('moverBackdrop').classList.add('open');
+}
+
+function fecharMover(){
+  document.getElementById('moverBackdrop').classList.remove('open');
+  moverContexto = null;
+}
+
+function renderMoverPicker(){
+  const lista = document.getElementById('moverLista');
+  const caminhoTextoEl = document.getElementById('moverCaminhoTexto');
+  const btnConfirmar = document.getElementById('moverBtnConfirmar');
+
+  if(moverDiscIdAtual === null){
+    caminhoTextoEl.innerText = 'Escolha uma disciplina';
+    btnConfirmar.style.display = 'none';
+    lista.innerHTML = state.disciplinas.length === 0
+      ? `<div class="mover-vazio">Nenhuma disciplina.</div>`
+      : state.disciplinas.map(d => `
+          <div class="mover-item" onclick="moverEntrarDisciplina('${d.id}')">
+            <span class="folder-ico">📘</span>
+            <div class="item-main"><div class="item-title">${escapeHtml(d.nome)}</div></div>
+            <div class="chevron">›</div>
+          </div>
+        `).join('');
+    return;
+  }
+
+  const disc = getDisciplina(moverDiscIdAtual);
+  const pasta = getPastaPorCaminho(disc, moverCaminhoAtual);
+  caminhoTextoEl.innerText = [disc.nome, ...nomesDoCaminho(disc, moverCaminhoAtual)].join(' › ');
+  btnConfirmar.style.display = '';
+  btnConfirmar.disabled = false;
+
+  const itemVoltar = `
+    <div class="mover-item" onclick="moverVoltarNivel()">
+      <span class="folder-ico">←</span>
+      <div class="item-main"><div class="item-title">Voltar</div></div>
+    </div>
+  `;
+
+  const itensSubpastas = pasta.subpastas.length === 0
+    ? `<div class="mover-vazio">Nenhuma subpasta aqui.</div>`
+    : pasta.subpastas.map(sp => {
+        const ehAPropriaQueEstaSendoMovida = moverContexto.tipo === 'subpasta' && sp.id === moverContexto.id;
+        return `
+          <div class="mover-item ${ehAPropriaQueEstaSendoMovida?'desabilitado':''}" onclick="moverEntrarSubpasta('${sp.id}')">
+            <span class="folder-ico">📁</span>
+            <div class="item-main"><div class="item-title">${escapeHtml(sp.nome)}</div></div>
+            <div class="chevron">›</div>
+          </div>
+        `;
+      }).join('');
+
+  lista.innerHTML = itemVoltar + itensSubpastas;
+}
+
+function moverEntrarDisciplina(id){
+  moverDiscIdAtual = id;
+  moverCaminhoAtual = [];
+  renderMoverPicker();
+}
+function moverEntrarSubpasta(id){
+  moverCaminhoAtual = [...moverCaminhoAtual, id];
+  renderMoverPicker();
+}
+function moverVoltarNivel(){
+  if(moverCaminhoAtual.length > 0) moverCaminhoAtual = moverCaminhoAtual.slice(0,-1);
+  else moverDiscIdAtual = null;
+  renderMoverPicker();
+}
+
+function confirmarMover(){
+  if(moverDiscIdAtual === null || !moverContexto) return;
+  const discDestino = getDisciplina(moverDiscIdAtual);
+  const pastaDestino = getPastaPorCaminho(discDestino, moverCaminhoAtual);
+  if(!pastaDestino) return;
+
+  if(moverContexto.tipo === 'topico'){
+    const discOrigem = getDisciplina(moverContexto.discIdOrigem);
+    const pastaOrigem = getPastaPorCaminho(discOrigem, moverContexto.caminhoOrigem);
+    const idx = pastaOrigem.topicos.findIndex(t=>t.id===moverContexto.id);
+    if(idx === -1) return;
+    const [item] = pastaOrigem.topicos.splice(idx,1);
+    pastaDestino.topicos.push(item);
+    salvarState(true);
+    fecharMover();
+    currentDiscId = moverDiscIdAtual;
+    currentCaminho = [...moverCaminhoAtual];
+    render();
+    mostrarToast('Tópico movido!');
+  } else {
+    const discOrigem = getDisciplina(moverContexto.discIdOrigem);
+    const pastaOrigemPai = getPastaPorCaminho(discOrigem, moverContexto.caminhoOrigem);
+    const idx = pastaOrigemPai.subpastas.findIndex(s=>s.id===moverContexto.id);
+    if(idx === -1) return;
+    const [item] = pastaOrigemPai.subpastas.splice(idx,1);
+    pastaDestino.subpastas.push(item);
+    salvarState(true);
+    fecharMover();
+    currentDiscId = moverDiscIdAtual;
+    currentCaminho = [...moverCaminhoAtual, item.id];
+    view = 'pasta';
+    render();
+    mostrarToast('Subpasta movida!');
+  }
 }
 
 /* ============================================================
@@ -1974,9 +2202,10 @@ document.getElementById('fileImport').addEventListener('change', function(e){
       state = parsed;
       if(!state.config) state.config = estadoPadrao().config;
       if(state.config.tamanhoIdx === undefined) state.config.tamanhoIdx = 1;
+      if(!state.lixeira) state.lixeira = [];
       state.disciplinas.forEach(migrarDisciplina);
       salvarState(true);
-      view = 'home'; currentDiscId=null; currentSubpastaId=null; currentTopicoId=null;
+      view = 'home'; currentDiscId=null; currentCaminho=[]; currentTopicoId=null;
       searchQuery = '';
       sessao = sessaoPadrao();
       salvarSessao(true);
@@ -2020,6 +2249,7 @@ window.addEventListener('beforeunload', ()=>{
   salvarSessao(true);
   salvarState(true);
 });
+reconstruirHistoricoInicial();
 render();
 </script>
 </body>
